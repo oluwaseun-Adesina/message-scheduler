@@ -1,0 +1,20 @@
+{
+  "name": "complete-bot",
+  "version": "1.0.0",
+  "description": "A discord bot that schedules events and sends reminders to users.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [],
+  "author": "oluwaseun-adesina",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.11.0",
+    "dotenv": "^16.3.1",
+    "moment": "^2.29.4",
+    "moment-timezone": "^0.5.43",
+    "mongoose": "^7.3.0",
+    "node-cron": "^3.0.2"
+  }
+}
