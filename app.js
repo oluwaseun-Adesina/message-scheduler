@@ -19,8 +19,10 @@ const client = new Client({
     partials: [Partials.Channel],
 });
 
-const token = process.env.TOKEN;
+const token = `${process.env.TOKEN}`;
 const mongoURI = process.env.MONGO_URI;
+
+
 
 // Define the scheduled message schema
 const scheduledSchema = new mongoose.Schema({
