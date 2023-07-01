@@ -1,70 +1,147 @@
-const { Client, IntentsBitField, Partials } = require('discord.js');
-const mongoose = require('mongoose');
-const moment = require('moment');
-const momentTimezone = require('moment-timezone');
-const webhookListener = require('./entry.js');
+const express = require("express");
+const ScheduledMessage = require("./model/scheduled");
 
-momentTimezone.tz.setDefault('Africa/Lagos');
+const { Client, IntentsBitField, Partials } = require("discord.js");
+const mongoose = require("mongoose");
+const moment = require("moment");
+const momentTimezone = require("moment-timezone");
+// const webhookListener = require('./entry.js');
 
-const timeZone = 'Africa/Lagos';
-moment().format()
-require('dotenv').config();
+momentTimezone.tz.setDefault("Africa/Lagos");
+
+const timeZone = "Africa/Lagos";
+moment().format();
+require("dotenv").config();
 
 const client = new Client({
-    intents: [
-        IntentsBitField.Flags.Guilds,
-        IntentsBitField.Flags.GuildMessages,
-        IntentsBitField.Flags.DirectMessages,
-        IntentsBitField.Flags.MessageContent,
-    ],
-    partials: [Partials.Channel],
+  intents: [
+    IntentsBitField.Flags.Guilds,
+    IntentsBitField.Flags.GuildMessages,
+    IntentsBitField.Flags.DirectMessages,
+    IntentsBitField.Flags.MessageContent,
+  ],
+  partials: [Partials.Channel],
 });
 
 const token = `${process.env.TOKEN}`;
 const mongoURI = process.env.MONGO_URI;
 
-
-
-// Define the scheduled message schema
-const scheduledSchema = new mongoose.Schema({
-    date: {
-        type: Date,
-        required: true,
-    },
-    content: {
-        type: String,
-        required: true,
-    },
-    channelId: {
-        type: String,
-        required: true,
-    },
-    interval: {
-        type: String,
-        enum: ['yearly', 'monthly', 'daily', 'custom'],
-        required: true,
-    },
-    customIntervalMinutes: {
-        type: Number,
-        default: 0,
-    },
-    schedulerName: {
-        type: String,
-        required: true,
-    },
-});
-
-const ScheduledMessage = mongoose.model('ScheduledMessage', scheduledSchema);
-
 // Connect to the MongoDB database
-mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => {
-        console.log('Connected to MongoDB');
-        startBot();
-    })
-    .catch((err) => console.error(err));
+mongoose
+  .connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => {
+    console.log("MongoDB connected");
+    startBot();
+  })
+  .catch((err) => console.log(err));
 
-async function startBot() {
+const app = express();
+app.use(express.json());
+
+app.post('/schedule', async (req, res) => {
+    try {
+      // Parse the request body
+      const { scheduledMessage, scheduledDateTime, channelId, interval, customIntervalMinutes } = req.body;
+  
+      // Validate the request parameters
+      if (!scheduledMessage || !scheduledDateTime || !channelId || !interval) {
+        return res.status(400).json({ error: 'Invalid request parameters.' });
+      }
+  
+      // Parse the scheduledDateTime
+      const dateTime = moment.tz(scheduledDateTime, 'YYYY-MM-DD HH:mm', timeZone).utc();
+      if (!dateTime.isValid()) {
+        return res.status(400).json({ error: 'Invalid date or time format. Please use the format: YYYY-MM-DD HH:MM.' });
+      }
+  
+      // Save the scheduled message to the database
+      const newScheduledMessage = new ScheduledMessage({
+        date: dateTime.toDate(),
+        content: scheduledMessage,
+        channelId,
+        interval,
+        customIntervalMinutes: parseInt(customIntervalMinutes, 10) || 0,
+        schedulerName: 'API',
+      });
+  
+      await newScheduledMessage.save();
+  
+      return res.status(200).json({ message: 'Scheduled message saved successfully.' });
+    } catch (error) {
+      console.error('Error scheduling message:', error);
+      return res.status(500).json({ error: 'An error occurred while scheduling the message.' });
+    }
+  });
+
+  app.get('/schedule', async (req, res) => {
+    try {
+      // Find all the scheduled messages in the database
+      const scheduledMessages = await ScheduledMessage.find();
+  
+      if (scheduledMessages.length === 0) {
+        return res.status(404).json({ error: 'No scheduled messages found.' });
+      }
+  
+      // Format the scheduled messages as a list
+      const messageList = scheduledMessages.map((scheduledMessage) => {
+        const dateTime = moment(scheduledMessage.date).tz(timeZone).format('YYYY-MM-DD HH:mm');
+        return {
+          id: scheduledMessage._id,
+          content: scheduledMessage.content,
+          dateTime,
+          schedulerName: scheduledMessage.schedulerName,
+        };
+      });
+  
+      return res.status(200).json(messageList);
+    } catch (error) {
+      console.error('Error retrieving scheduled messages:', error);
+      return res.status(500).json({ error: 'An error occurred while retrieving scheduled messages.' });
+    }
+  });
+
+  app.patch('/scheduled-messages/:id', async (req, res) => {
+    try {
+      const messageId = req.params.id;
+      const updates = req.body;
+  
+      // Find the scheduled message by ID and update it in the database
+      const updatedMessage = await ScheduledMessage.findByIdAndUpdate(messageId, updates, { new: true });
+  
+      if (!updatedMessage) {
+        return res.status(404).json({ error: `Scheduled message with ID "${messageId}" not found.` });
+      }
+  
+      return res.status(200).json(updatedMessage);
+    } catch (error) {
+      console.error('Error updating scheduled message:', error);
+      return res.status(500).json({ error: 'An error occurred while updating the scheduled message.' });
+    }
+  });
+  
+  app.delete('/scheduled-messages/:id', async (req, res) => {
+    try {
+      const messageId = req.params.id;
+  
+      // Find the scheduled message by ID and remove it from the database
+      const deletedMessage = await ScheduledMessage.findByIdAndRemove(messageId);
+  
+      if (!deletedMessage) {
+        return res.status(404).json({ error: `Scheduled message with ID "${messageId}" not found.` });
+      }
+  
+      return res.status(200).json({ message: `Scheduled message "${deletedMessage.content}" with ID "${messageId}" deleted.` });
+    } catch (error) {
+      console.error('Error deleting scheduled message:', error);
+      return res.status(500).json({ error: 'An error occurred while deleting the scheduled message.' });
+    }
+  });
+    
+  const server = app.listen(3000, () => {
+    console.log('API server is running on http://localhost:3000');
+  });
+
+  async function startBot() {
     client.on('ready', () => {
         console.log(`Logged in as ${client.user.tag}`);
     });
@@ -217,3 +294,12 @@ async function startBot() {
     client.login(token);
 }
 
+
+// Gracefully handle process termination
+process.on('SIGINT', () => {
+    console.log('Shutting down...');
+    server.close(() => {
+      console.log('API server closed.');
+      process.exit(0);
+    });
+  });
