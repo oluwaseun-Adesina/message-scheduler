@@ -10,7 +10,7 @@ const momentTimezone = require("moment-timezone");
 momentTimezone.tz.setDefault("Africa/Lagos");
 
 const timeZone = "Africa/Lagos";
-moment().format();
+// moment().format();
 require("dotenv").config();
 
 const client = new Client({
